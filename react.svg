@@ -1,0 +1,319 @@
+import React, { useMemo, useState } from "react";
+
+type Group = { words: string[]; category: string };
+type Board = { level: string; hint: [string, string]; groups: Group[] };
+
+const allBoards: Board[] = [
+  {
+    level: "קל",
+    hint: ["המן", "אסתר"],
+    groups: [
+      { words: ["המן", "אסתר", "מרדכי", "אחשוורוש"], category: "דמויות במגילה" },
+      { words: ["קשת", "מסכה", "פאה", "איפור"], category: "אביזרי תחפושת" },
+      { words: ["קפלן", "תל השומר", "רמלה", "קריה"], category: "בסיסים בהם יושבת מחלקת יעחק" },
+      { words: ["לץ", "בדחן", "שטותניק", "מוקיון"], category: "ליצן" }
+    ]
+  },
+  {
+    level: "קל-בינוני",
+    hint: ["ושתי", "זרש"],
+    groups: [
+      { words: ["ושתי", "זרש", "בגתן", "תרש"], category: "דמויות משנה במגילה" },
+      { words: ["מלך", "מלכה", "רשע", "יהודי"], category: "כינויים מהמגילה" },
+      { words: ["מתנות", "משתה", "מגילה", "משלוח מנות"], category: "מצוות פורים" },
+      { words: ["שמח", "מבדח", "להתארח", "שנה"], category: "אני פורים" }
+    ]
+  },
+  {
+    level: "בינוני",
+    hint: ["גורל", "פור"],
+    groups: [
+      { words: ["תלייה", "יורים", "רעל", "גיליוטינה"], category: "דרכים להרוג את המן" },
+      { words: ["גורל", "הפלה", "הטלה", "פור"], category: "הטלת פור" },
+      { words: ["יין", "שיכור", "עדלאידע", "שתייה"], category: "אלמנט השתייה" },
+      { words: ["י״ג באדר", "ערב פורים", "תענית", "צום"], category: "תענית אסתר" }
+    ]
+  },
+  {
+    level: "בינוני-קשה",
+    hint: ["רעשן", "שנער"],
+    groups: [
+      { words: ["אסתר", "מרים", "שמעון", "יצחק"], category: "נשיאי עליון" },
+      { words: ["חמינאי", "כורש", "אחשוורוש", "מופז"], category: "פרסים" },
+      { words: ["רעשן", "שנער", "נרעש", "שערן"], category: "אנגרמה" },
+      { words: ["פיל", "בר", "המן", "קשבת"], category: "אוזן" }
+    ]
+  },
+  {
+    level: "קשה",
+    hint: ["אור", "שמחה"],
+    groups: [
+      { words: ["סבירות", "שבת", "כשרות", "מצוות פורים"], category: "נקבעו בהלכה" },
+      { words: ["תרומה", "תצווה", "תשא", "ויקהל"], category: "פרשות השבוע" },
+      { words: ["אור", "שמחה", "ששון", "יקר"], category: "פסוק 'ליהודים הייתה...'" },
+      { words: ["הדסה", "יוסף", "אלי כהן", "אנוסים"], category: "אנשים בזהות מחופשת" }
+    ]
+  }
+];
+
+function shuffle<T>(array: T[]): T[] {
+  return [...array].sort(() => Math.random() - 0.5);
+}
+
+export default function App() {
+  const [boardIndex, setBoardIndex] = useState(0);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [foundGroups, setFoundGroups] = useState<Group[]>([]);
+  const [message, setMessage] = useState("");
+  const [hintUsed, setHintUsed] = useState(false);
+  const [boardAttempts, setBoardAttempts] = useState(0);
+  const [totalAttempts, setTotalAttempts] = useState(0);
+
+  const currentBoard = allBoards[boardIndex];
+
+  const flatWords = useMemo(() => {
+    return shuffle(currentBoard.groups.flatMap((g) => g.words));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardIndex]);
+
+  const solvedWords = useMemo(() => foundGroups.flatMap((g) => g.words), [foundGroups]);
+
+  const remainingWords = useMemo(
+    () => flatWords.filter((w) => !solvedWords.includes(w)),
+    [flatWords, solvedWords]
+  );
+
+  const solvedCount = foundGroups.length;
+  const finishedBoard = solvedCount === currentBoard.groups.length;
+  const finishedAll = finishedBoard && boardIndex === allBoards.length - 1;
+
+  const toggleSelect = (word: string) => {
+    if (solvedWords.includes(word)) return;
+
+    setSelected((prev) => {
+      if (prev.includes(word)) return prev.filter((x) => x !== word);
+      if (prev.length >= 4) return prev;
+      return [...prev, word];
+    });
+  };
+
+  const oneAway = () => {
+    const unsolved = currentBoard.groups.filter(
+      (g) => !foundGroups.some((fg) => fg.category === g.category)
+    );
+    for (const g of unsolved) {
+      const overlap = g.words.filter((w) => selected.includes(w)).length;
+      if (overlap === 3) return true;
+    }
+    return false;
+  };
+
+  const checkGroup = () => {
+    if (selected.length !== 4 || finishedBoard) return;
+
+    setBoardAttempts((x) => x + 1);
+    setTotalAttempts((x) => x + 1);
+
+    const match = currentBoard.groups.find((g) =>
+      g.words.every((w) => selected.includes(w))
+    );
+
+    if (match && !foundGroups.some((g) => g.category === match.category)) {
+      setFoundGroups((prev) => [...prev, match]);
+      setMessage(`נכון! קבוצה: ${match.category}`);
+      setSelected([]);
+      return;
+    }
+
+    setMessage(oneAway() ? "כמעט! הצלחת 3 מתוך 4 ✔️" : "לא מדויק... נסו שוב 😊");
+    setSelected([]);
+  };
+
+  const useHint = () => {
+    if (hintUsed || finishedBoard) return;
+
+    const [w1, w2] = currentBoard.hint;
+
+    const w1Available = remainingWords.includes(w1);
+    const w2Available = remainingWords.includes(w2);
+
+    setHintUsed(true);
+
+    if (!w1Available || !w2Available) {
+      setMessage(
+        "הרמז של הלוח הזה כבר לא רלוונטי כי הקבוצה שלו נפתרה (או שהמילים כבר ירדו מהלוח). אין רמז נוסף בלוח זה."
+      );
+      return;
+    }
+
+    setMessage(`רמז: "${w1}" ו-"${w2}" באותה קבוצה 👀`);
+
+    setSelected((prev) => {
+      const merged = [...new Set([...prev, w1, w2])]
+        .filter((w) => remainingWords.includes(w))
+        .slice(0, 4);
+      return merged;
+    });
+  };
+
+  const nextBoard = () => {
+    setBoardIndex((i) => i + 1);
+    setSelected([]);
+    setFoundGroups([]);
+    setMessage("");
+    setHintUsed(false);
+    setBoardAttempts(0);
+  };
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.header}>
+        <div style={styles.title}>🎭 Purim Connections</div>
+        <div style={styles.subtitle}>דרגת קושי: {currentBoard.level}</div>
+
+        <div style={styles.pills}>
+          <span style={styles.pill}>
+            לוח: {boardIndex + 1} / {allBoards.length}
+          </span>
+          <span style={styles.pill}>
+            קבוצות: {solvedCount} / {currentBoard.groups.length}
+          </span>
+          <span style={styles.pill}>ניסיונות בלוח: {boardAttempts}</span>
+          <span style={styles.pill}>ניסיונות סה״כ: {totalAttempts}</span>
+          <span style={styles.pill}>רמז: {hintUsed ? "נוצל" : "זמין"}</span>
+        </div>
+      </div>
+
+      <div style={styles.solvedWrap}>
+        {foundGroups.map((g) => (
+          <div key={g.category} style={styles.solvedRow}>
+            <b>{g.category}:</b>&nbsp;{g.words.join(", ")}
+          </div>
+        ))}
+      </div>
+
+      <div style={styles.grid}>
+        {remainingWords.map((word, idx) => {
+          const isSelected = selected.includes(word);
+          return (
+            <button
+              key={`${word}-${idx}`}
+              onClick={() => toggleSelect(word)}
+              style={{ ...styles.tile, ...(isSelected ? styles.tileSelected : null) }}
+            >
+              {word}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={styles.actions}>
+        <button
+          onClick={checkGroup}
+          disabled={selected.length !== 4 || finishedBoard}
+          style={{
+            ...styles.btn,
+            ...(selected.length !== 4 || finishedBoard ? styles.btnDisabled : null)
+          }}
+        >
+          בדיקה
+        </button>
+
+        <button
+          onClick={useHint}
+          disabled={hintUsed || finishedBoard}
+          style={{
+            ...styles.btn,
+            ...(hintUsed || finishedBoard ? styles.btnDisabled : null)
+          }}
+        >
+          רמז (1 קבוע)
+        </button>
+      </div>
+
+      {message ? <div style={styles.message}>{message}</div> : null}
+
+      {finishedBoard && boardIndex < allBoards.length - 1 ? (
+        <button onClick={nextBoard} style={{ ...styles.btn, marginTop: 16 }}>
+          המשך ללוח הבא →
+        </button>
+      ) : null}
+
+      {finishedAll ? <div style={styles.done}>🎉 סיימת את כל הלוחות! כל הכבוד!</div> : null}
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    padding: 24,
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+    background: "linear-gradient(135deg, #f3e8ff 0%, #ffe4e6 100%)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 16
+  },
+  header: { textAlign: "center", maxWidth: 900 },
+  title: { fontSize: 32, fontWeight: 800 },
+  subtitle: { fontSize: 18, fontWeight: 600, marginTop: 6 },
+  pills: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 14
+  },
+  pill: {
+    background: "rgba(255,255,255,0.7)",
+    padding: "8px 12px",
+    borderRadius: 999,
+    boxShadow: "0 1px 6px rgba(0,0,0,0.08)",
+    fontSize: 12
+  },
+  solvedWrap: { width: "100%", maxWidth: 720, display: "flex", flexDirection: "column", gap: 8 },
+  solvedRow: {
+    background: "#bbf7d0",
+    borderRadius: 16,
+    padding: 12,
+    boxShadow: "0 1px 6px rgba(0,0,0,0.08)"
+  },
+  grid: {
+    width: "100%",
+    maxWidth: 720,
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: 12
+  },
+  tile: {
+    background: "white",
+    border: "none",
+    borderRadius: 18,
+    padding: "14px 10px",
+    fontSize: 18,
+    fontWeight: 650,
+    boxShadow: "0 1px 10px rgba(0,0,0,0.10)",
+    cursor: "pointer"
+  },
+  tileSelected: {
+    background: "#c4b5fd"
+  },
+  actions: { display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center", marginTop: 10 },
+  btn: {
+    background: "#111827",
+    color: "white",
+    border: "none",
+    borderRadius: 18,
+    padding: "10px 16px",
+    fontSize: 16,
+    fontWeight: 700,
+    cursor: "pointer"
+  },
+  btnDisabled: {
+    opacity: 0.55,
+    cursor: "not-allowed"
+  },
+  message: { fontSize: 18, fontWeight: 700, marginTop: 4 },
+  done: { fontSize: 22, fontWeight: 900, color: "#15803d", marginTop: 14 }
+};
